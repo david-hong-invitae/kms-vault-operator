@@ -33,6 +33,9 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Derive image tag
         id: tag
         run: |
@@ -54,10 +57,10 @@ jobs:
       - name: Verify eMudhra roots absent
         run: |
           docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }}
-          id=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }})
-          docker export "$id" | tar -x -O etc/ssl/certs/ca-certificates.crt \
+          container_id=$(docker create ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.tag }})
+          docker export "$container_id" | tar -x -O etc/ssl/certs/ca-certificates.crt \
             | openssl storeutl -noout -text -certs /dev/stdin \
             | grep -E "emSign ECC Root CA - G3|AAA Certificate Services" \
-            && echo "FAIL: vulnerable roots still present" && exit 1 \
+            && echo "FAIL: vulnerable roots still present" && docker rm "$container_id" && exit 1 \
             || echo "PASS: no eMudhra roots found"
-          docker rm "$id"
+          docker rm "$container_id"
